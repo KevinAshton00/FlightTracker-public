@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torn API Fetch</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1 {
+            text-align: center;
+            color: #007BFF;
+        }
+
+        div {
+            margin: 10px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input, textarea, button {
+            margin-bottom: 10px;
+            padding: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #007BFF;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        th:hover {
+            background-color: #0056b3;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        li {
+            margin-bottom: 10px;
+        }
+
+        hr {
+            border: 0;
+            height: 1px;
+            background: #ddd;
+            margin: 10px 0;
+        }
+
+        /* Add some styling for the new feature */
+        .profileSection {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Faction's Flights Tracker</h1>
+
+<div>
+    <label for="apiKey">Enter API Key:</label>
+    <input type="text" id="apiKey" placeholder="Enter your API Key">
+    <label for="factionId">Enter Faction ID:</label>
+    <input type="text" id="factionId" placeholder="Enter Faction ID">
+    <button onclick="saveApiKey()">Save API Key</button>
+    <button onclick="fetchData()">Fetch Data</button>
+</div>
+
+<div>
+    <h2>Hey Stalker, Why are you trying to know where are those people going?</h2>
+    <table id="factionMembersTable">
+        <thead>
+            <tr>
+                <th onclick="sortTable(0)">ID</th>
+                <th onclick="sortTable(1)">Name</th>
+                <th onclick="sortTable(2)">Level</th>
+                <th onclick="sortTable(3)">Last Action</th>
+                <th onclick="sortTable(4)">Status</th>
+                <th onclick="sortTable(5)">Status Details</th>
+            </tr>
+        </thead>
+        <tbody id="factionMembers"></tbody>
+    </table>
+</div>
+
+<div class="profileSection">
+    <label for="memberId">Enter Member ID:</label>
+    <input type="text" id="memberId" placeholder="Enter Member ID">
+    <button onclick="fetchFactionId()">Fetch Faction ID</button>
+</div>
+
+<script>
+    let apiKeyInput = document.getElementById('apiKey');
+    let factionIdInput = document.getElementById('factionId');
+
+    apiKeyInput.value = localStorage.getItem('apiKey') || '';
+
+    function saveApiKey() {
+        const apiKey = apiKeyInput.value;
+        localStorage.setItem('apiKey', apiKey);
+        alert('API Key saved!');
+    }
+
+    function fetchData() {
+        const apiKey = apiKeyInput.value;
+        const factionId = factionIdInput.value;
+
+        const url = `https://api.torn.com/faction/${factionId}?selections=basic&key=${apiKey}`;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => displayMembers(data.members))
+            .catch(error => console.error('Error fetching data:', error));
+    }
+
+    function displayMembers(members) {
+        const factionMembersTable = document.getElementById('factionMembers');
+        factionMembersTable.innerHTML = '';
+
+        const countries = {};
+
+        for (const memberId in members) {
+            const member = members[memberId];
+            if (isInHospital(member) || isAbroadOrTraveling(member)) {
+                const country = member.status.details || 'Unknown';
+
+                if (!countries[country]) {
+                    countries[country] = [];
+                }
+
+                countries[country].push({
+                    id: memberId,
+                    name: member.name,
+                    level: member.level,
+                    lastAction: member.last_action.relative,
+                    status: member.status.description,
+                    details: member.status.details,
+                });
+            }
+        }
+
+        for (const country in countries) {
+            const countryList = countries[country];
+            countryList.forEach(member => {
+                const row = factionMembersTable.insertRow();
+                row.innerHTML = `
+                    <td>${member.id}</td>
+                    <td><a href="https://www.torn.com/profiles.php?XID=${member.id}" target="_blank">${member.name}</a></td>
+                    <td>${member.level}</td>
+                    <td>${member.lastAction}</td>
+                    <td>${member.status}</td>
+                    <td>${member.details || 'N/A'}</td>
+                `;
+            });
+        }
+    }
+
+    function sortTable(columnIndex) {
+        const table = document.getElementById('factionMembersTable');
+        const rows = Array.from(table.rows).slice(1);
+
+        rows.sort((a, b) => {
+            const cellA = a.cells[columnIndex].textContent.trim();
+            const cellB = b.cells[columnIndex].textContent.trim();
+
+            return isNaN(cellA) ? cellA.localeCompare(cellB) : cellA - cellB;
+        });
+
+        while (table.rows.length > 1) {
+            table.deleteRow(1);
+        }
+
+        rows.forEach(row => table.appendChild(row));
+    }
+
+    function isInHospital(member) {
+        return (
+            member.status.state === 'Hospital' &&
+            member.status.description.toLowerCase().startsWith('in a')
+        );
+    }
+
+    function isAbroadOrTraveling(member) {
+        const abroadStates = ['Abroad', 'Traveling', 'Returning from'];
+        return abroadStates.includes(member.status.state);
+    }
+
+    function fetchFactionId() {
+        const apiKey = apiKeyInput.value;
+        const memberId = document.getElementById('memberId').value;
+
+        const profileUrl = `https://api.torn.com/user/${memberId}?selections=profile&key=${apiKey}`;
+
+        fetch(profileUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (data.faction && data.faction.faction_id) {
+                    factionIdInput.value = data.faction.faction_id;
+                    alert('Faction ID fetched and updated!');
+                } else {
+                    alert('Member does not belong to any faction or API request failed.');
+                }
+            })
+            .catch(error => console.error('Error fetching profile data:', error));
+    }
+
+</script>
+
+</body>
+</html>
